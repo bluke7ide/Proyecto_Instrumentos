@@ -1,0 +1,240 @@
+---
+title: "Untitled"
+author: "Luis Fernando Amey Apuy"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{python}
+import numpy as np
+from scipy.stats import norm
+```
+
+
+```{python}
+
+```
+
+constlam es contante para todo n
+delta = h = 0.25
+
+
+```{python}
+def simulate_terminal(L, constlam, N, delta, h, idum):
+    for j in range(N):
+        np.random.seed(idum)
+        z = np.random.normal() 
+
+        for i in range(j + 1):
+            L[i, j + 1] = L[i, j]
+
+        for i in range(j + 1, N + 1):
+            mu = 0
+            for k in range(i + 1, N + 1):
+                mu -= (delta * (constlam ** 2) * L[k, j]) / (1 + delta * L[k, j])
+            L[i, j + 1] = L[i, j] * np.exp((mu - 0.5 * (constlam ** 2)) * h + constlam * np.sqrt(h) * z)
+```
+
+```{python}
+def cblack(sig, k, r, b, T, delta):
+    """Calcula el valor de Black para un caplet."""
+    d1 = (np.log(r / k) + 0.5 * sig**2 * T) / (sig * np.sqrt(T))
+    d2 = (np.log(r / k) - 0.5 * sig**2 * T) / (sig * np.sqrt(T))
+    return delta * b * (r * norm.cdf(d1) - k * norm.cdf(d2))
+
+def exact_caplet(caplet, L, constlam, N, T, K, delta):
+    """Calcula el valor exacto de un caplet."""
+    P = np.ones(N + 2)  # Usamos un índice adicional para P[n+1]
+    for n in range(1, N + 2):
+        for j in range(n):
+            P[n] *= 1.0 / (1.0 + delta * L[j, 0])
+    for n in range(1, N + 1):
+        caplet[n] = cblack(constlam, K[n], L[n, 0], P[n + 1], T[n], delta)
+
+def simulate_caplet(caplet, L, constlam, N, T, K, delta, h, niter):
+    """Simula el precio del caplet mediante Monte Carlo."""
+    
+    num = 1.0
+    for j in range(N + 1):
+        num *= 1.0 / (1.0 + delta * L[j, 0])
+    caplet[:] = 0.0 
+    
+    for iter in range(int(niter)):
+        simulate_terminal(L, constlam, N, delta, h, -iter)
+
+        for n in range(1, N):
+            den = 1.0
+            for j in range(n + 1, N + 1):
+                den *= 1.0 / (1.0 + delta * L[j, n + 1])
+            caplet[n] += (num * delta * max(0, L[n, n] - K[n]) / den) / niter
+        
+        # Último caplet (caso especial)
+        caplet[N] += num * delta * max(0, L[N, N] - K[N]) / niter
+```
+
+```{python}
+
+simulate_caplet(caplet, L, constlam, 19, T, K, 0.25, 0.25, niter)
+
+```
+
+```{python}
+def european_swaption(alpha, L, constlam, N, T, K, delta, h, niter):
+    """
+    Calcula el precio de una swaption europea mediante simulación de Monte Carlo.
+    """
+    def pos(x):
+        """Devuelve el máximo entre 0 y x."""
+        return max(0, x)
+
+    num = 1.0
+    for j in range(N + 1):
+        num *= 1.0 / (1.0 + delta * L[j, 0])
+    
+    avg = 0.0  # Promedio de los resultados
+    for iter in range(1, int(niter) + 1):
+        simulate_terminal(L, constlam, N, delta, h, -iter)  # Simula tasas futuras
+
+        den = 1.0
+        for j in range(alpha + 1, N + 1):
+            den *= 1.0 / (1.0 + delta * L[j, alpha + 1])
+
+        swaption = 0.0
+        for i in range(alpha + 1, N + 2):
+            Bi = 1.0
+            for j in range(alpha, i):
+                Bi *= 1.0 / (1.0 + delta * L[j, alpha])
+            swaption += Bi * delta * (L[i - 1, alpha] - K)
+
+        ans = num * pos(swaption) / den
+        avg += ans / niter
+
+    return avg
+  
+def S(alpha, beta, B, del_t):
+    """
+    Calcula el valor presente del swap subyacente.
+    """
+    den = np.sum(del_t * B[alpha + 1:beta + 1])
+    return (B[alpha] - B[beta]) / den
+
+def condexp(coef, order, x):
+    """
+    Calcula el valor esperado condicional basado en un polinomio de regresión.
+    """
+    ret = coef[0]
+    for io in range(1, order + 1):
+        ret += coef[io] * x**io
+    return ret
+  
+def BermudanSwaption(alpha, L, constlam, N, T, K, del_t, h, nit, payrec):
+    """
+    Calcula el valor de una Bermudan Swaption usando simulación Monte Carlo y regresión.
+
+    Args:
+        alpha (int): Índice de inicio para el cálculo.
+        L (numpy.ndarray): Matriz de tasas simuladas.
+        constlam (float): Parámetro de volatilidad.
+        N (int): Último índice de tiempo.
+        T (numpy.ndarray): Fechas de ejercicio.
+        K (float): Strike del swap.
+        del_t (float): Intervalo de tiempo entre pagos.
+        h (float): Paso del simulador.
+        nit (int): Número de trayectorias de Monte Carlo.
+        payrec (int): Indica si se paga o recibe la tasa fija (PAYFIXED o PAYFLOAT).
+
+    Returns:
+        float: Valor promedio de la Bermudan Swaption.
+    """
+
+    
+
+    def pos(x):
+        """
+        Retorna el valor positivo de x o cero si es negativo.
+        """
+        return max(x, 0.0)
+
+    # Inicialización de matrices
+    s = np.zeros((nit, N + 1))
+    e = np.zeros((nit, N + 1))
+    numer = np.zeros((nit, N + 1))
+
+    # Simulación de trayectorias y cálculos de valores futuros
+    for it in range(nit):
+        SimulateTerminal(L, constlam, N, del_t, h, -it)  # Debes definir esta función
+        for i in range(alpha, N + 1):
+            B = np.ones(N + 2)
+            for n in range(i + 1, N + 2):
+                B[n] = np.prod(1.0 / (1.0 + del_t * L[j][i]) for j in range(i, n))
+            s[it, i] = S(i, N + 1, B, del_t)
+            e[it, i] = np.sum(B[n] * del_t * ((L[n - 1, i] - K) if payrec == PAYFIXED else (K - L[n - 1, i]))
+                              for n in range(i + 1, N + 2))
+            e[it, i] = pos(e[it, i])
+            numer[it, i] = np.prod(1.0 / (1.0 + del_t * L[n, i]) for n in range(i, N + 1))
+
+    # Variables auxiliares para regresión y decisión óptima
+    cf = np.zeros((nit, N + 1))
+    itmflag = np.zeros((nit, N + 1), dtype=int)
+    eflag = np.zeros((nit, N + 1), dtype=int)
+    cf[:, N] = e[:, N]  # Valor final del flujo de efectivo
+
+    # Regresión inversa desde el último nodo
+    for n in range(N - 1, alpha - 1, -1):
+        itm_indices = np.where(e[:, n] > 0.0)[0]
+        nitm = len(itm_indices)
+
+        if nitm > 0:
+            x = s[itm_indices, n]
+            y = cf[itm_indices, n + 1] * numer[itm_indices, n] / numer[itm_indices, n + 1]
+
+            coef = regress(x, y, order=2)
+            for idx in itm_indices:
+                expected = condexp(coef, 2, s[idx, n])
+                if e[idx, n] > expected:
+                    eflag[idx, n] = 1
+                    eflag[idx, n + 1:] = 0
+                else:
+                    eflag[idx, n] = 0
+
+        cf[:, n] = np.where(eflag[:, n], e[:, n], cf[:, n + 1] * numer[:, n] / numer[:, n + 1])
+
+    # Cálculo del valor promedio
+    disc = np.prod(1.0 / (1.0 + del_t * L[:, 0]))
+    avg = np.mean(cf[:, alpha] * disc / numer[:, alpha + 1])
+
+    return avg
+
+
+def regress(x, y, order=2):
+    """
+    Realiza una regresión de orden 1 o 2 entre los datos x e y.
+    """
+    if order == 1:
+        A = np.vstack([x, np.ones(len(x))]).T
+        coef, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
+        return coef[::-1]  # Ajusta orden para compatibilidad
+    elif order == 2:
+        A = np.vstack([x**2, x, np.ones(len(x))]).T
+        coef, _, _, _ = np.linalg.lstsq(A, y, rcond=None)
+        return coef[::-1]
+    else:
+        raise ValueError("Order not supported. Use 1 or 2.")
+```
+
+
+```{python}
+N = 5
+T = np.array([0, 1, 2, 3, 4, 5])  # Tiempos de vencimiento
+K = np.array([0, 0.02, 0.025, 0.03, 0.035, 0.04])  # Strikes
+L = np.zeros((N + 1, N + 1))  # Matriz de tasas
+delta = 0.01
+h = 0.1
+niter = 1000
+constlam = 0.1
+
+caplet = np.zeros(N + 1)
+simulate_caplet(caplet, L, constlam, N, T, K, delta, h, niter)
+print("Caplet prices:", caplet)
+```
+
