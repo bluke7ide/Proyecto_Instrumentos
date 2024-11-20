@@ -38,34 +38,39 @@ def simulate_terminal(L, constlam, N, delta, h, idum):
 ```{python}
 def cblack(sig, k, r, b, T, delta):
     """Calcula el valor de Black para un caplet."""
-    d1 = (np.log(r / k) + 0.5 * sig**2 * T) / (sig * np.sqrt(T))
-    d2 = (np.log(r / k) - 0.5 * sig**2 * T) / (sig * np.sqrt(T))
+    d1 = (np.log(r / k) + 0.5 * (sig**2) * T) / (sig * np.sqrt(T))
+    d2 = (np.log(r / k) - 0.5 * (sig**2) * T) / (sig * np.sqrt(T))
     return delta * b * (r * norm.cdf(d1) - k * norm.cdf(d2))
+```
 
+Integrar lambda techo, que es constlam
+
+
+P es Bn
+```{python}
 def exact_caplet(caplet, L, constlam, N, T, K, delta):
     """Calcula el valor exacto de un caplet."""
-    P = np.ones(N + 2)  # Usamos un índice adicional para P[n+1]
+    P = np.ones(N + 1) 
     for n in range(1, N + 2):
         for j in range(n):
-            P[n] *= 1.0 / (1.0 + delta * L[j, 0])
+            P[n] *= 1 / (1 + delta * L[j, 0]) 
     for n in range(1, N + 1):
         caplet[n] = cblack(constlam, K[n], L[n, 0], P[n + 1], T[n], delta)
 
 def simulate_caplet(caplet, L, constlam, N, T, K, delta, h, niter):
     """Simula el precio del caplet mediante Monte Carlo."""
-    
-    num = 1.0
+    num = 1
     for j in range(N + 1):
-        num *= 1.0 / (1.0 + delta * L[j, 0])
-    caplet[:] = 0.0 
+        num *= 1 / (1 + delta * L[j, 0])
+    caplet[:] = 0
     
-    for iter in range(int(niter)):
-        simulate_terminal(L, constlam, N, delta, h, -iter)
+    for i in range(1, niter + 1):
+        simulate_terminal(L, constlam, N, delta, h, -i)
 
         for n in range(1, N):
-            den = 1.0
+            den = 1
             for j in range(n + 1, N + 1):
-                den *= 1.0 / (1.0 + delta * L[j, n + 1])
+                den *= 1 / (1 + delta * L[j, n + 1])
             caplet[n] += (num * delta * max(0, L[n, n] - K[n]) / den) / niter
         
         # Último caplet (caso especial)
@@ -73,9 +78,12 @@ def simulate_caplet(caplet, L, constlam, N, T, K, delta, h, niter):
 ```
 
 ```{python}
-
 simulate_caplet(caplet, L, constlam, 19, T, K, 0.25, 0.25, niter)
 
+
+# Crear o buscar L, T, L
+# caplet es un retorno, sacar
+# niter se corre con 10000
 ```
 
 ```{python}
