@@ -315,17 +315,15 @@ def bermudan_swaption(alpha, L, constlam, N, T, K, delta, h, nit, payrec):
     
     return avg
 
-import numpy as np
-
 if __name__ == "__main__":
     # Parámetros básicos
     N = 10  # Número de pasos temporales
-    T = np.linspace(0.1, 2.0, N + 1)  # Tiempos hasta el vencimiento
-    delta = 0.25  # Incremento temporal
-    h = 0.1  # Tamaño del paso temporal
-    niter = 1000  # Iteraciones Monte Carlo
-    constlam = 0.2  # Lambda constante
-    K = 0.03  # Tasa de ejercicio de la swaption
+    T = np.linspace(0, 2.0, N+1)  # Tiempos hasta el vencimiento
+    delta = 0.5  # Incremento temporal
+    h = 0.5  # Tamaño del paso temporal
+    niter = 10000  # Iteraciones Monte Carlo
+    constlam = 0.15  # Lambda constante
+    K = 0.0506978  # Tasa de ejercicio de la swaption
     alpha = 2  # Índice inicial para la swaption
     payrec = 1  # Indicar Payer Swaption
 
@@ -334,7 +332,7 @@ if __name__ == "__main__":
 
     # Inicializar matriz de tasas forward (L) con valores iniciales
     L = np.zeros((N + 1, N + 1))
-    L[:, 0] = 0.05  # Tasa inicial del 5%
+    L[:, 0] = np.exp(-0.05*T)  # Tasa inicial del 5%
 
     # Calcular el precio de la Bermudan Swaption
     precio = bermudan_swaption(alpha, L, constlam, N, T, K, delta, h, niter, payrec)
