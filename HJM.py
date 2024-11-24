@@ -122,7 +122,7 @@ class PolynomialInterpolator:
         C = self.params
         X = np.array([x**i for i in reversed(range(n))])
         return sum(np.multiply(X, C))
-
+5
 # Ajustar volatilidades mediante interpoladores polinómicos
 fitted_vols = []
 
@@ -149,3 +149,69 @@ show()
 # para las tres componentes principales, cada grafico corresponde a una de las
 # tres componentes principales, mostrando como se ajusta la volatilidad en funcion
 # del tenor
+
+# Parámetros de simulación
+timesteps = 100  # Número de pasos en el tiempo
+tenor_steps = len(tenors)  # Número de tenores
+dt = 1 / 252  # Tamaño del paso temporal (1 día hábil)
+dz = np.random.normal(0, np.sqrt(dt), (timesteps, tenor_steps))  # Incrementos de Wiener
+
+# Definir v(t, T) como combinación de factores principales
+def calculate_v_t_T(t, T, eigenfunctions, stochastic_coeffs):
+    """
+    Calcula v(t, T) como una combinación lineal de los factores principales.
+    
+    Args:
+        t (int): Paso temporal actual.
+        T (float): Tenor (maduración futura).
+        eigenfunctions (list): Lista de funciones eigenvectors ajustadas φ_i(T).
+        stochastic_coeffs (list): Lista de coeficientes estocásticos a_i(t) (uno por factor principal).
+
+    Returns:
+        float: Valor de v(t, T).
+    """
+    return sum(stochastic_coeffs[i][t] * eigenfunctions[i](T) for i in range(len(eigenfunctions)))
+
+# Definir funciones de eigenvectores ajustados (polinomios de fitted_vols)
+eigenfunctions = [
+    lambda T: fitted_vols[0].calc(T),  # Primera componente principal
+    lambda T: fitted_vols[1].calc(T),  # Segunda componente principal
+    lambda T: fitted_vols[2].calc(T),  # Tercera componente principal
+]
+
+# Simular coeficientes estocásticos a_i(t) como procesos de movimiento Browniano
+stochastic_coeffs = [
+    np.cumsum(np.random.normal(0, np.sqrt(dt), timesteps)) for _ in range(3)
+]
+
+# Inicializar F(t, T) con la curva inicial
+F_t_T = np.zeros((timesteps, tenor_steps))
+F_t_T[0, :] = np.linspace(0.02, 0.05, tenor_steps)  # Curva inicial lineal entre 2% y 5%
+
+# Inicializar dz (incrementos del movimiento Browniano)
+dz = np.random.normal(0, np.sqrt(dt), (timesteps, tenor_steps))
+
+# Simular dF(t, T)
+for t in range(1, timesteps):
+    for j, T in enumerate(tenors):
+        # Calcular v(t, T)
+        v_t_T = calculate_v_t_T(t, T, eigenfunctions, stochastic_coeffs)
+        
+        # Aproximar m(t, T) (integral discreta de la condición de no arbitraje)
+        m_t_T = v_t_T * np.sum([calculate_v_t_T(t, tau, eigenfunctions, stochastic_coeffs) for tau in tenors]) * dt
+        
+        # Resolver la ecuación diferencial estocástica
+        F_t_T[t, j] = F_t_T[t - 1, j] + m_t_T * dt + v_t_T * dz[t, j]
+
+# Graficar las curvas simuladas
+plot(tenors, F_t_T[0, :], label='t = 0')
+plot(tenors, F_t_T[int(timesteps / 2), :], label=f't = {int(timesteps / 2)}')
+plot(tenors, F_t_T[-1, :], label=f't = {timesteps - 1}')
+xlabel('Tenor T')
+ylabel('Tasa forward F(t, T)')
+title('Simulación de curvas forward usando HJM con volatilidad sumatoria')
+legend()
+show()
+
+
+
