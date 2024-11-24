@@ -315,8 +315,6 @@ def bermudan_swaption(alpha, L, constlam, N, T, K, delta, h, nit, payrec):
     
     return avg
 
-import numpy as np
-
 if __name__ == "__main__":
     # Parámetros básicos
     N = 10  # Número de pasos temporales
@@ -325,7 +323,7 @@ if __name__ == "__main__":
     h = 0.1  # Tamaño del paso temporal
     niter = 1000  # Iteraciones Monte Carlo
     constlam = 0.2  # Lambda constante
-    K = 0.03  # Tasa de ejercicio de la swaption
+    K = np.array([0.03] * (N + 1))  # Tasa de ejercicio para cada caplet
     alpha = 2  # Índice inicial para la swaption
     payrec = 1  # Indicar Payer Swaption
 
@@ -337,6 +335,11 @@ if __name__ == "__main__":
     L[:, 0] = 0.05  # Tasa inicial del 5%
 
     # Calcular el precio de la Bermudan Swaption
-    precio = bermudan_swaption(alpha, L, constlam, N, T, K, delta, h, niter, payrec)
-    
-    print(f"Precio estimado de la Bermudan Swaption: {precio:.6f}")
+    precio_swaption = bermudan_swaption(alpha, L, constlam, N, T, K[0], delta, h, niter, payrec)
+    print(f"Precio estimado de la Bermudan Swaption: {precio_swaption:.6f}")
+
+    # Calcular el precio exacto del caplet usando la fórmula de Black
+    caplet_exact = np.zeros(N + 1)
+    exact_caplet(caplet_exact, L, constlam, N, T, K, delta)
+    for n in range(1, N + 1):
+        print(f"Precio exacto del caplet {n}: {caplet_exact[n]:.6f}")
